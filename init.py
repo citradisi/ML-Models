@@ -23,7 +23,7 @@ def get_dataset(directory, filename, input_size):
         img = cv2.imread(f'{base_dir}/{row[0]}', cv2.IMREAD_COLOR)
         if img is not None:
             img = cv2.resize(img, input_size)
-            # cv2.imwrite(f'D:/Project/PythonProject/Machine Learning/Traditional_food/test/{row[0]}', img)
+            cv2.imwrite(f'{directory}/test/{row[0]}', img)
             images.append(img)
 
     return np.array(images), np.array(labels)
@@ -64,7 +64,9 @@ def train_val_generators(train_image, train_label, validation_image, validation_
 def create_model():
 
     models = Sequential([
-        Conv2D(8, kernel_size=3, padding='same', strides=2, activation='relu', input_shape=(150, 150, 3)),
+        Conv2D(16, kernel_size=3, padding='same', strides=2, activation='relu', input_shape=(150, 150, 3)),
+        MaxPooling2D(2, 2),
+        Conv2D(16, kernel_size=3, padding='same', strides=2, activation='relu', input_shape=(150, 150, 3)),
         MaxPooling2D(2, 2),
         Flatten(),
         Dense(35, activation='softmax')
@@ -81,7 +83,7 @@ def create_model():
 if __name__ == '__main__':
     BATCH_SIZE = 3
     INPUT_SIZE = (150, 150)
-    base_dir = 'D:/Project/PythonProject/Scan-food/Traditional_food/food-tfk-images'
+    base_dir = 'D:/Project/PythonProject/Scan-food/food-tfk-images'
 
     train_images, train_labels = get_dataset(base_dir, 'train.csv', INPUT_SIZE)
     val_images, val_labels = get_dataset(base_dir, 'dev.csv', INPUT_SIZE)
@@ -103,7 +105,7 @@ if __name__ == '__main__':
 
     model = create_model()
 
-    input('check point')
+    # input('check point')
 
     history = model.fit(
         train_gen, epochs=15,
