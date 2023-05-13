@@ -1,10 +1,9 @@
 import os
-import shutil
+import random
 import pandas as pd
 from cv2 import cv2
-from sklearn.preprocessing import LabelEncoder
 from keras.models import Sequential
-from keras.optimizers import RMSprop
+from keras.optimizers import Adam
 from keras.losses import sparse_categorical_crossentropy
 from keras import regularizers
 from keras.layers import Dense, Conv2D, MaxPooling2D, Flatten, Dropout
@@ -13,60 +12,97 @@ import numpy as np
 from keras.preprocessing.image import ImageDataGenerator
 
 
-def get_dataset(directory, filename, input_size):
-    images = []
+def split_data(directory, filename, input_size, types):
+    dest_dir = os.path.join(directory, types)
+    check = ''
+
+    if not os.path.exists(dest_dir):
+        os.makedirs(dest_dir)
 
     reader = pd.read_csv(filename)
-    encode = LabelEncoder()
-    labels = encode.fit_transform(reader['Finding Labels'])
-    for index, row in reader.iterrows():
-        img = cv2.imread(f'{base_dir}/{row[0]}', cv2.IMREAD_COLOR)
-        if img is not None:
-            img = cv2.resize(img, input_size)
-            cv2.imwrite(f'{directory}/test/{row[0]}', img)
-            images.append(img)
+    for i in range(len(reader)):
+        img = reader.iloc[i, 0]
+        label = reader.iloc[i, 2]
 
-    return np.array(images), np.array(labels)
+        for j, unit in enumerate(reader.iloc[i, 3:]):
+            if unit == 1:
+                class_label = os.path.join(dest_dir, label)
+                if not os.path.exists(class_label):
+                    os.makedirs(class_label)
+
+                data_images = os.path.join(class_label, img)
+                if not os.path.exists(data_images):
+                    src = os.path.join(directory, img)
+                    dst = os.path.join(class_label, img)
+                    pixel = cv2.imread(src)
+                    new_image = cv2.resize(pixel, input_size)
+                    cv2.imwrite(dst, new_image)
+                    check = 'data successfully sorted'
+                else:
+                    check = 'the data is already sorted'
+
+    return check
 
 
-def train_val_generators(train_image, train_label, validation_image, validation_label, batch_size):
+def get_data(directory):
+    data_ = []
 
+    for index, img_class in enumerate(os.listdir(directory)):
+        path = os.path.join(directory, img_class)
+        for path_img in os.listdir(path):
+            img_path = os.path.join(path, path_img)
+            images = cv2.imread(img_path, cv2.IMREAD_COLOR)
+            data_.append([images, index])
+
+    return data_
+
+
+def split_to_feature_and_labels(data_):
+    feature = []
+    label = []
+    for feature_, label_ in data_:
+        feature.append(feature_)
+        label.append(label_)
+
+    return np.array(feature), np.array(label)
+
+
+def train_val_generators(x_train_, y_train_, x_val_, y_val_, batch_size):
     train_datagen = ImageDataGenerator(
-        rescale=1/255,
+        rescale=1 / 255,
         rotation_range=40,
-        width_shift_range=0.2,
-        height_shift_range=0.2,
-        shear_range=0.2,
-        zoom_range=0.2,
         horizontal_flip=True,
         vertical_flip=True,
         fill_mode='nearest'
     )
 
     train_generator = train_datagen.flow(
-        x=train_image,
-        y=train_label,
-        batch_size=batch_size,
-        shuffle=True
+        x=x_train_,
+        y=y_train_,
+        batch_size=batch_size
     )
 
-    validation_datagen = ImageDataGenerator(rescale=1/255)
+    validation_datagen = ImageDataGenerator(rescale=1 / 255)
 
     validation_generator = validation_datagen.flow(
-        x=validation_image,
-        y=validation_label,
-        batch_size=batch_size,
+        x=x_val_,
+        y=y_val_,
+        batch_size=batch_size
     )
 
     return train_generator, validation_generator
 
 
 def create_model():
-
     models = Sequential([
-        Conv2D(16, kernel_size=3, padding='same', strides=2, activation='relu', input_shape=(150, 150, 3)),
+        Conv2D(32, kernel_size=3, padding='same', strides=2,
+               activation='relu', input_shape=(150, 150, 3)),
         MaxPooling2D(2, 2),
-        Conv2D(16, kernel_size=3, padding='same', strides=2, activation='relu', input_shape=(150, 150, 3)),
+        Conv2D(32, kernel_size=3, padding='same', strides=2,
+               activation='relu', kernel_regularizer=regularizers.L1(0.005)),
+        MaxPooling2D(2, 2),
+        Conv2D(16, kernel_size=3, padding='same', strides=2,
+               activation='relu', kernel_regularizer=regularizers.L1(0.005)),
         MaxPooling2D(2, 2),
         Flatten(),
         Dense(35, activation='softmax')
@@ -74,9 +110,10 @@ def create_model():
 
     models.compile(
         loss=sparse_categorical_crossentropy,
-        optimizer=RMSprop(),
+        optimizer=Adam(learning_rate=0.001),
         metrics=['accuracy']
     )
+
     return models
 
 
@@ -85,17 +122,26 @@ if __name__ == '__main__':
     INPUT_SIZE = (150, 150)
     base_dir = 'D:/Project/PythonProject/Scan-food/food-tfk-images'
 
-    train_images, train_labels = get_dataset(base_dir, 'train.csv', INPUT_SIZE)
-    val_images, val_labels = get_dataset(base_dir, 'dev.csv', INPUT_SIZE)
+    ## run this only for first time open this project
+    # train_split = split_data(base_dir, 'train.csv', INPUT_SIZE, 'train')
+    # val_split = split_data(base_dir, 'dev.csv', INPUT_SIZE, 'validation')
 
-    print(f"Training images has shape: {train_images.shape} and dtype: {train_images.dtype}")
-    print(f"Training labels has shape: {train_labels.shape} and dtype: {train_labels.dtype}")
-    print(f"Validation images has shape: {val_images.shape} and dtype: {val_images.dtype}")
-    print(f"Validation labels has shape: {val_labels.shape} and dtype: {val_labels.dtype}")
+    data_train = get_data(f'{base_dir}/train')
+    data_val = get_data(f'{base_dir}/validation')
+    random.shuffle(data_train)
+
+    x_train, y_train = split_to_feature_and_labels(data_train)
+    x_validation, y_validation = split_to_feature_and_labels(data_val)
+
+    print(f"Training images has shape: {x_train.shape} and dtype: {x_train.dtype}")
+    print(f"Training labels has shape: {y_train.shape} and dtype: {y_train.dtype}")
+    print(f"Validation images has shape: {x_validation.shape} and dtype: {x_validation.dtype}")
+    print(f"Validation labels has shape: {y_validation.shape} and dtype: {y_validation.dtype}")
 
     train_gen, validation_gen = train_val_generators(
-        train_images, train_labels,
-        val_images, val_labels, BATCH_SIZE
+        x_train, y_train,
+        x_validation, y_validation,
+        BATCH_SIZE
     )
 
     print(f"Images of training generator have shape: {train_gen.x.shape}")
@@ -105,10 +151,8 @@ if __name__ == '__main__':
 
     model = create_model()
 
-    # input('check point')
-
     history = model.fit(
-        train_gen, epochs=15,
+        train_gen, epochs=20,
         validation_data=validation_gen, batch_size=BATCH_SIZE
     )
 
