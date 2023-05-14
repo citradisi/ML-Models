@@ -3,10 +3,10 @@ import random
 import pandas as pd
 from cv2 import cv2
 from keras.models import Sequential
-from keras.optimizers import Adam
-from keras.losses import sparse_categorical_crossentropy
-from keras import regularizers
-from keras.layers import Dense, Conv2D, MaxPooling2D, Flatten, Dropout
+from keras.optimizers import Adam, RMSprop
+from keras.utils import normalize, to_categorical
+from keras.losses import categorical_crossentropy, sparse_categorical_crossentropy
+from keras.layers import Dense, Conv2D, MaxPooling2D, BatchNormalization, Flatten
 from matplotlib import pyplot as plt
 import numpy as np
 from keras.preprocessing.image import ImageDataGenerator
@@ -40,8 +40,7 @@ def split_data(directory, filename, input_size, types):
                     check = 'data successfully sorted'
                 else:
                     check = 'the data is already sorted'
-
-    return check
+    print(check)
 
 
 def get_data(directory):
@@ -79,7 +78,7 @@ def train_val_generators(x_train_, y_train_, x_val_, y_val_, batch_size):
     train_generator = train_datagen.flow(
         x=x_train_,
         y=y_train_,
-        batch_size=batch_size
+        batch_size=batch_size,
     )
 
     validation_datagen = ImageDataGenerator(rescale=1 / 255)
@@ -94,37 +93,64 @@ def train_val_generators(x_train_, y_train_, x_val_, y_val_, batch_size):
 
 
 def create_model():
+    activation = 'sigmoid'
     models = Sequential([
-        Conv2D(32, kernel_size=3, padding='same', strides=2,
-               activation='relu', input_shape=(150, 150, 3)),
-        MaxPooling2D(2, 2),
-        Conv2D(32, kernel_size=3, padding='same', strides=2,
-               activation='relu', kernel_regularizer=regularizers.L1(0.005)),
-        MaxPooling2D(2, 2),
-        Conv2D(16, kernel_size=3, padding='same', strides=2,
-               activation='relu', kernel_regularizer=regularizers.L1(0.005)),
-        MaxPooling2D(2, 2),
+        Conv2D(32, kernel_size=3, activation=activation,
+               padding='same', input_shape=(100, 100, 3)),
+        MaxPooling2D(),
+
+        Conv2D(10, kernel_size=3, activation=activation, padding='same'),
+        MaxPooling2D(),
+
         Flatten(),
         Dense(35, activation='softmax')
     ])
 
     models.compile(
         loss=sparse_categorical_crossentropy,
-        optimizer=Adam(learning_rate=0.001),
+        optimizer=RMSprop(),
         metrics=['accuracy']
     )
 
     return models
 
 
+def train_the_model(model_, train_gene, val_gene, batch_size):
+    history = model_.fit(
+        train_gene, epochs=50,
+        validation_data=val_gene, batch_size=batch_size
+    )
+
+    acc = history.history['accuracy']
+    val_acc = history.history['val_accuracy']
+    loss = history.history['loss']
+    val_loss = history.history['val_loss']
+
+    epochs = range(len(acc))
+
+    plt.plot(epochs, acc, 'r', label='Training accuracy')
+    plt.plot(epochs, val_acc, 'b', label='Validation accuracy')
+    plt.title('Training and validation accuracy')
+    plt.legend()
+    plt.figure()
+
+    plt.plot(epochs, loss, 'r', label='Training Loss')
+    plt.plot(epochs, val_loss, 'b', label='Validation Loss')
+    plt.title('Training and validation loss')
+    plt.legend()
+
+    plt.show()
+
+
 if __name__ == '__main__':
     BATCH_SIZE = 3
-    INPUT_SIZE = (150, 150)
+    INPUT_SIZE = (100, 100)
     base_dir = 'D:/Project/PythonProject/Scan-food/food-tfk-images'
 
     ## run this only for first time open this project
-    # train_split = split_data(base_dir, 'train.csv', INPUT_SIZE, 'train')
-    # val_split = split_data(base_dir, 'dev.csv', INPUT_SIZE, 'validation')
+    # split_data(base_dir, 'train.csv', INPUT_SIZE, 'train')
+    # split_data(base_dir, 'dev.csv', INPUT_SIZE, 'validation')
+    # split_data(base_dir, 'test.csv', INPUT_SIZE, 'validation')
 
     data_train = get_data(f'{base_dir}/train')
     data_val = get_data(f'{base_dir}/validation')
@@ -150,28 +176,5 @@ if __name__ == '__main__':
     print(f"Labels of validation generator have shape: {validation_gen.y.shape}")
 
     model = create_model()
-
-    history = model.fit(
-        train_gen, epochs=20,
-        validation_data=validation_gen, batch_size=BATCH_SIZE
-    )
-
-    acc = history.history['accuracy']
-    val_acc = history.history['val_accuracy']
-    loss = history.history['loss']
-    val_loss = history.history['val_loss']
-
-    epochs = range(len(acc))
-
-    plt.plot(epochs, acc, 'r', label='Training accuracy')
-    plt.plot(epochs, val_acc, 'b', label='Validation accuracy')
-    plt.title('Training and validation accuracy')
-    plt.legend()
-    plt.figure()
-
-    plt.plot(epochs, loss, 'r', label='Training Loss')
-    plt.plot(epochs, val_loss, 'b', label='Validation Loss')
-    plt.title('Training and validation loss')
-    plt.legend()
-
-    plt.show()
+    # model.summary()
+    train_the_model(model, train_gen, validation_gen, BATCH_SIZE)
