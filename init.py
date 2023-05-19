@@ -1,126 +1,31 @@
-import os
-import random
-import pandas as pd
-from cv2 import cv2
-from keras.models import Sequential
-from keras.optimizers import Adam, RMSprop
-from keras.utils import normalize, to_categorical
-from keras.losses import categorical_crossentropy, sparse_categorical_crossentropy
-from keras.layers import Dense, Conv2D, MaxPooling2D, BatchNormalization, Flatten
-from matplotlib import pyplot as plt
+from keras.utils import image_dataset_from_directory
+import matplotlib.pyplot as plt
 import numpy as np
-from keras.preprocessing.image import ImageDataGenerator
+from keras.models import load_model, Sequential
+from keras.layers import Dense, Conv2D, MaxPooling2D, Flatten
+from keras.optimizers import Adam
+from keras.losses import sparse_categorical_crossentropy
+from PIL import Image
+import os
 
 
-def split_data(directory, filename, input_size, types):
-    dest_dir = os.path.join(directory, types)
-    check = ''
+def make_to_jpeg(src_dir):
+    output = 'food-tfk-images/data'
+    for class_dir in os.listdir(src_dir):
+        path = os.path.join(src_dir, class_dir)
+        check = os.path.join(output, class_dir)
 
-    if not os.path.exists(dest_dir):
-        os.makedirs(dest_dir)
+        if not os.path.exists(check):
+            os.mkdir(check)
 
-    reader = pd.read_csv(filename)
-    for i in range(len(reader)):
-        img = reader.iloc[i, 0]
-        label = reader.iloc[i, 2]
-
-        for j, unit in enumerate(reader.iloc[i, 3:]):
-            if unit == 1:
-                class_label = os.path.join(dest_dir, label)
-                if not os.path.exists(class_label):
-                    os.makedirs(class_label)
-
-                data_images = os.path.join(class_label, img)
-                if not os.path.exists(data_images):
-                    src = os.path.join(directory, img)
-                    dst = os.path.join(class_label, img)
-                    pixel = cv2.imread(src)
-                    new_image = cv2.resize(pixel, input_size)
-                    cv2.imwrite(dst, new_image)
-                    check = 'data successfully sorted'
-                else:
-                    check = 'the data is already sorted'
-    print(check)
+        for i, img in enumerate(os.listdir(path)):
+            image = Image.open(os.path.join(path, img))
+            dest_path = os.path.join(check, f'{class_dir}{i}.jpg')
+            rgb_in = image.convert('RGB')
+            rgb_in.save(dest_path, 'JPEG')
 
 
-def get_data(directory):
-    data_ = []
-
-    for index, img_class in enumerate(os.listdir(directory)):
-        path = os.path.join(directory, img_class)
-        for path_img in os.listdir(path):
-            img_path = os.path.join(path, path_img)
-            images = cv2.imread(img_path, cv2.IMREAD_COLOR)
-            data_.append([images, index])
-
-    return data_
-
-
-def split_to_feature_and_labels(data_):
-    feature = []
-    label = []
-    for feature_, label_ in data_:
-        feature.append(feature_)
-        label.append(label_)
-
-    return np.array(feature), np.array(label)
-
-
-def train_val_generators(x_train_, y_train_, x_val_, y_val_, batch_size):
-    train_datagen = ImageDataGenerator(
-        rescale=1 / 255,
-        rotation_range=40,
-        horizontal_flip=True,
-        vertical_flip=True,
-        fill_mode='nearest'
-    )
-
-    train_generator = train_datagen.flow(
-        x=x_train_,
-        y=y_train_,
-        batch_size=batch_size,
-    )
-
-    validation_datagen = ImageDataGenerator(rescale=1 / 255)
-
-    validation_generator = validation_datagen.flow(
-        x=x_val_,
-        y=y_val_,
-        batch_size=batch_size
-    )
-
-    return train_generator, validation_generator
-
-
-def create_model():
-    activation = 'sigmoid'
-    models = Sequential([
-        Conv2D(32, kernel_size=3, activation=activation,
-               padding='same', input_shape=(100, 100, 3)),
-        MaxPooling2D(),
-
-        Conv2D(10, kernel_size=3, activation=activation, padding='same'),
-        MaxPooling2D(),
-
-        Flatten(),
-        Dense(35, activation='softmax')
-    ])
-
-    models.compile(
-        loss=sparse_categorical_crossentropy,
-        optimizer=RMSprop(),
-        metrics=['accuracy']
-    )
-
-    return models
-
-
-def train_the_model(model_, train_gene, val_gene, batch_size):
-    history = model_.fit(
-        train_gene, epochs=50,
-        validation_data=val_gene, batch_size=batch_size
-    )
-
+def show_history(history):
     acc = history.history['accuracy']
     val_acc = history.history['val_accuracy']
     loss = history.history['loss']
@@ -142,39 +47,117 @@ def train_the_model(model_, train_gene, val_gene, batch_size):
     plt.show()
 
 
-if __name__ == '__main__':
-    BATCH_SIZE = 3
-    INPUT_SIZE = (100, 100)
-    base_dir = 'D:/Project/PythonProject/Scan-food/food-tfk-images'
+def prediction_model(list_class_):
+    model = load_model('Models.h5')
+    image_path = 'jakarta.jpg'
 
-    ## run this only for first time open this project
-    # split_data(base_dir, 'train.csv', INPUT_SIZE, 'train')
-    # split_data(base_dir, 'dev.csv', INPUT_SIZE, 'validation')
-    # split_data(base_dir, 'test.csv', INPUT_SIZE, 'validation')
+    img = Image.open(image_path)
+    img = img.convert('RGB')
+    img = img.resize((150, 150))
+    img = np.array(img) / 255
+    img = np.expand_dims(img, axis=0)
 
-    data_train = get_data(f'{base_dir}/train')
-    data_val = get_data(f'{base_dir}/validation')
-    random.shuffle(data_train)
+    predict = model.predict(img)
+    predict = np.argmax(predict)
+    predict = list_class_[predict]
+    print(predict)
 
-    x_train, y_train = split_to_feature_and_labels(data_train)
-    x_validation, y_validation = split_to_feature_and_labels(data_val)
+    show_img = Image.open(image_path)
+    plt.imshow(show_img)
+    plt.show()
 
-    print(f"Training images has shape: {x_train.shape} and dtype: {x_train.dtype}")
-    print(f"Training labels has shape: {y_train.shape} and dtype: {y_train.dtype}")
-    print(f"Validation images has shape: {x_validation.shape} and dtype: {x_validation.dtype}")
-    print(f"Validation labels has shape: {y_validation.shape} and dtype: {y_validation.dtype}")
 
-    train_gen, validation_gen = train_val_generators(
-        x_train, y_train,
-        x_validation, y_validation,
-        BATCH_SIZE
+def training(train_, validation_):
+    active = 'relu'
+    model = Sequential([
+        Conv2D(128, activation=active, strides=1, kernel_size=3, input_shape=(150, 150, 3)),
+        MaxPooling2D(2, 2),
+
+        Conv2D(64, activation=active, strides=1, kernel_size=3),
+        MaxPooling2D(2, 2),
+
+        Conv2D(64, activation=active, strides=1, kernel_size=3),
+        MaxPooling2D(2, 2),
+
+        Flatten(),
+        Dense(512, activation=active),
+        Dense(15, activation='softmax')
+    ])
+
+    model.compile(
+        optimizer=Adam(),
+        loss=sparse_categorical_crossentropy,
+        metrics=['accuracy']
     )
 
-    print(f"Images of training generator have shape: {train_gen.x.shape}")
-    print(f"Labels of training generator have shape: {train_gen.y.shape}")
-    print(f"Images of validation generator have shape: {validation_gen.x.shape}")
-    print(f"Labels of validation generator have shape: {validation_gen.y.shape}")
+    model.summary()
+    history = model.fit(
+        train_,
+        epochs=5,
+        validation_data=validation_,
+        batch_size=4
+    )
+    show_history(history)
+    model.save('Models.h5')
 
-    model = create_model()
-    # model.summary()
-    train_the_model(model, train_gen, validation_gen, BATCH_SIZE)
+
+def prepare_data(data_):
+    date_iterator = data_.as_numpy_iterator()
+    batch = date_iterator.next()
+
+    ## check images
+    # fig, ax = plt.subplots(ncols=4, figsize=(30, 30))
+    # for i, img in enumerate(batch[0][:4]):
+    #     ax[i].imshow(img.astype(int))
+    #     ax[i].title.set_text(batch[1][i])
+    #
+    # plt.show()
+
+    scaled_data = data_.map(lambda x, y: (x/255, y))
+
+    ## check images after scale
+    # fig, ax = plt.subplots(ncols=4, figsize=(30, 30))
+    # for i, img in enumerate(scaled_data.as_numpy_iterator().next()[0][:4]):
+    #     ax[i].imshow(img)
+    #     ax[i].title.set_text(batch[1][i])
+    #
+    # plt.show()
+    train_size = int(len(scaled_data)*.8)
+    val_size = int(len(scaled_data)*.2)+1
+
+    print(f'batch_size = {len(scaled_data)}')
+    print(f'batch_size train = {train_size}')
+    print(f'batch_size val   = {val_size}')
+
+    train = scaled_data.take(train_size)
+    validation = scaled_data.skip(train_size).take(val_size)
+    training(train, validation)
+
+
+if __name__ == '__main__':
+    category = [
+        'asinan-jakarta',
+        'ayam-betutu',
+        'bika-ambon',
+        'bubur-manado',
+        'es-dawet',
+        'gado-gado',
+        'gudeg',
+        'gulai-ikan-mas',
+        'kerak-telor',
+        'mie-aceh',
+        'nasi-goreng-kampung',
+        'rawon',
+        'rendang',
+        'sate',
+        'soto',
+    ]
+
+    dir_ = 'food-tfk-images/data/'
+    ## change all image to jpeg
+    # make_to_jpeg(dir_)
+
+    data = image_dataset_from_directory(dir_, batch_size=4, image_size=(150, 150), shuffle=True)
+    list_class = data.class_names
+    # prepare_data(data)
+    prediction_model(list_class)
