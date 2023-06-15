@@ -8,3 +8,8 @@ The dataset has training data and test data totaling 2988 images, of which train
 **DISCLAIMER** 
 
 Copyright images from google images or the uploader of the images. Our team only collected and gathered the images and then labeling for training model object detection.
+
+## Workflow
+![ML](https://ia802700.us.archive.org/7/items/workflow_202306/assesment.PNG)
+
+we model ourselves with 3 2D convolution layers accompanied by a 2D Maxpooling layer, then use dense and softmax for output.
