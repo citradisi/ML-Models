@@ -12,4 +12,4 @@ Copyright images from google images or the uploader of the images. Our team only
 ## Workflow
 ![ML](https://ia802700.us.archive.org/7/items/workflow_202306/assesment.PNG)
 
-we model ourselves with 3 2D convolution layers accompanied by a 2D Maxpooling layer, then use dense and softmax for output.
+we create our own models with 3 2D convolution layers accompanied by a 2D Maxpooling layer, then use dense and softmax for output.
