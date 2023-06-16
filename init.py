@@ -1,9 +1,11 @@
 from keras.utils import image_dataset_from_directory
 import matplotlib.pyplot as plt
 import numpy as np
+from  keras.applications import VGG19
 from keras.models import load_model, Sequential
-from keras.layers import Dense, Conv2D, MaxPooling2D, Flatten
+from keras.layers import Dense, Conv2D, MaxPooling2D, Flatten, Dropout, BatchNormalization, GlobalAveragePooling2D
 from keras.optimizers import Adam
+from keras import regularizers
 from keras.losses import sparse_categorical_crossentropy
 from PIL import Image
 import os
@@ -69,18 +71,37 @@ def prediction_model(list_class_):
 
 def training(train_, validation_):
     active = 'relu'
+    # model = Sequential([
+    #     Conv2D(128, activation=active, strides=1, kernel_size=3, input_shape=(150, 150, 3)),
+    #     MaxPooling2D(2, 2),
+    #
+    #     Conv2D(64, activation=active, strides=1, kernel_size=3,),
+    #     BatchNormalization(renorm=True),
+    #     MaxPooling2D(2, 2),
+    #
+    #     Conv2D(64, activation=active, strides=1, kernel_size=3,),
+    #     BatchNormalization(renorm=True),
+    #     MaxPooling2D(2, 2),
+    #
+    #     Flatten(),
+    #     Dense(256, activation=active),
+    #     Dense(15, activation='softmax')
+    # ])
+
+    base_model = VGG19(
+        pooling='avg',
+        include_top=False,
+        weights='imagenet',
+        input_shape=(150, 150, 3)
+    )
+
+    base_model.trainable = False
+
     model = Sequential([
-        Conv2D(128, activation=active, strides=1, kernel_size=3, input_shape=(150, 150, 3)),
-        MaxPooling2D(2, 2),
-
-        Conv2D(64, activation=active, strides=1, kernel_size=3),
-        MaxPooling2D(2, 2),
-
-        Conv2D(64, activation=active, strides=1, kernel_size=3),
-        MaxPooling2D(2, 2),
-
+        base_model,
+        BatchNormalization(renorm=True),
         Flatten(),
-        Dense(512, activation=active),
+        Dense(512, activation=active, activity_regularizer=regularizers.L1L2(0.02)),
         Dense(15, activation='softmax')
     ])
 
@@ -93,7 +114,7 @@ def training(train_, validation_):
     model.summary()
     history = model.fit(
         train_,
-        epochs=5,
+        epochs=20,
         validation_data=validation_,
         batch_size=4
     )
@@ -133,7 +154,6 @@ def prepare_data(data_):
     validation = scaled_data.skip(train_size).take(val_size)
     training(train, validation)
 
-
 if __name__ == '__main__':
     category = [
         'asinan-jakarta',
@@ -159,5 +179,5 @@ if __name__ == '__main__':
 
     data = image_dataset_from_directory(dir_, batch_size=4, image_size=(150, 150), shuffle=True)
     list_class = data.class_names
-    # prepare_data(data)
-    prediction_model(list_class)
+    prepare_data(data)
+    # prediction_model(list_class)
